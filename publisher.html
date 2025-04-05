@@ -52,7 +52,7 @@
 
     async function fetchDocs() {
       try {
-        const res = await fetch('http://localhost:5000/view');
+        const res = await fetch('https://class-vi-exam-paper.onrender.com/view');
         const docs = await res.json();
         const list = document.getElementById('docList');
         list.innerHTML = '';
