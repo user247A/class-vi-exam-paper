@@ -66,16 +66,21 @@ app.delete("/delete/:id", async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
+    // ⚠️ Safely attempt to delete the file
     try {
-      fs.unlinkSync(doc.filePath); // try deleting the file
+      if (fs.existsSync(doc.filePath)) {
+        fs.unlinkSync(doc.filePath);
+      } else {
+        console.warn("File does not exist:", doc.filePath);
+      }
     } catch (fileErr) {
-      console.warn("⚠️ File not found, skipping delete:", fileErr.message);
+      console.warn("⚠️ Error deleting file:", fileErr.message);
     }
 
-    await doc.deleteOne();
+    await doc.deleteOne(); // delete from MongoDB
     res.json({ message: "🗑️ Document deleted successfully!" });
   } catch (err) {
-    console.error("Server error:", err);
+    console.error("❌ Delete route error:", err);
     res.status(500).json({ message: "❌ Failed to delete document." });
   }
 });
