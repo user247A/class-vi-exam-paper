@@ -66,15 +66,16 @@ app.delete("/delete/:id", async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    fs.unlinkSync(doc.filePath); // delete file
-    await doc.deleteOne();       // delete from DB
+    try {
+      fs.unlinkSync(doc.filePath); // try deleting the file
+    } catch (fileErr) {
+      console.warn("⚠️ File not found, skipping delete:", fileErr.message);
+    }
 
+    await doc.deleteOne();
     res.json({ message: "🗑️ Document deleted successfully!" });
   } catch (err) {
-    console.error(err);
+    console.error("Server error:", err);
     res.status(500).json({ message: "❌ Failed to delete document." });
   }
 });
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
