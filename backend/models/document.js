@@ -5,7 +5,7 @@ const documentSchema = new mongoose.Schema({
   fileName: String,
   fileType: String,
   filePath: String,
-  fileURL: String,
-}, { timestamps: true });
+  fileURL: String
+});
 
 module.exports = mongoose.model("Document", documentSchema);
