@@ -17,7 +17,10 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => console.error("❌ MongoDB error:", err));
 
@@ -34,12 +37,14 @@ app.post("/publish", upload.single("file"), async (req, res) => {
     const { header } = req.body;
     const file = req.file;
 
+    const fileURL = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+
     const newDoc = new Document({
       header,
       fileName: file.originalname,
       fileType: file.mimetype,
       filePath: file.path,
-      fileURL: `http://localhost:${process.env.PORT}/uploads/${file.filename}`,
+      fileURL
     });
 
     await newDoc.save();
@@ -66,21 +71,21 @@ app.delete("/delete/:id", async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Document not found" });
 
-    // ⚠️ Safely attempt to delete the file
-    try {
-      if (fs.existsSync(doc.filePath)) {
-        fs.unlinkSync(doc.filePath);
-      } else {
-        console.warn("File does not exist:", doc.filePath);
-      }
-    } catch (fileErr) {
-      console.warn("⚠️ Error deleting file:", fileErr.message);
+    // Safe delete
+    if (fs.existsSync(doc.filePath)) {
+      fs.unlinkSync(doc.filePath);
     }
 
-    await doc.deleteOne(); // delete from MongoDB
+    await doc.deleteOne();
     res.json({ message: "🗑️ Document deleted successfully!" });
   } catch (err) {
     console.error("❌ Delete route error:", err);
     res.status(500).json({ message: "❌ Failed to delete document." });
   }
+});
+
+// ✅ FIX: Use dynamic port for Render
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
