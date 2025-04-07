@@ -66,14 +66,16 @@
       z-index: 9999;
       display: none;
       flex-direction: column;
+      padding: 10px;
     }
     .fullscreen-content {
+      width: 100%;
+      height: 100%;
       max-width: 90%;
       max-height: 90%;
       background: #000;
       border-radius: 8px;
       overflow: hidden;
-      padding: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -145,20 +147,36 @@
         }
 
         documents.forEach((doc, index) => {
+          const fileName = doc.fileName;
+          const fileURL = doc.fileURL;
+          const fileType = doc.fileType;
+          const filePath = fileURL.split("/").pop();
+
           const docElement = document.createElement("div");
           docElement.className = "document";
           docElement.style.animationDelay = `${index * 0.2}s`;
+
+          let previewHTML = "";
+
+          if (fileType.startsWith("image/")) {
+            previewHTML = `<img src="${fileURL}" alt="${fileName}" />`;
+          } else if (fileType === "application/pdf") {
+            previewHTML = `
+              <iframe src="${fileURL}" onerror="this.outerHTML='<p>📎 <a href=${fileURL} target=_blank>Open PDF</a></p>'"></iframe>
+            `;
+          }
+
           docElement.innerHTML = `
             <h3>${doc.header}</h3>
-            <p>📁 File: ${doc.fileName}</p>
-            ${doc.fileType.startsWith("image/") ? `<img src="${doc.fileURL}" />` : ""}
-            ${doc.fileType.startsWith("application/pdf") ? `<iframe src="${doc.fileURL}"></iframe>` : ""}
+            <p>📁 File: ${fileName}</p>
+            ${previewHTML}
             <br>
-            <a href="${doc.fileURL}" download="${doc.fileName}">
+            <a href="https://class-vi-exam-paper.onrender.com/download/${filePath}" target="_blank">
               <button>⬇️ Download</button>
             </a>
-            <button class="maximize-btn" onclick="openFullscreen('${doc.fileURL}', '${doc.fileType}')">🔍 Maximize</button>
+            <button class="maximize-btn" onclick="openFullscreen('${fileURL}', '${fileType}')">🔍 Maximize</button>
           `;
+
           container.appendChild(docElement);
         });
       } catch (err) {
@@ -172,8 +190,8 @@
       const fullscreenContent = document.getElementById("fullscreen-content");
 
       fullscreenContent.innerHTML = type.startsWith("image")
-        ? `<img src="${url}" style="width: 100%; height: 100%;">`
-        : `<iframe src="${url}" style="width: 100%; height: 90vh;"></iframe>`;
+        ? `<img src="${url}" alt="Fullscreen Image">`
+        : `<iframe src="${url}" style="width: 100%; height: 90vh;" onerror="this.outerHTML='<p>📎 <a href=${url} target=_blank>Open PDF</a></p>'"></iframe>`;
 
       fullscreenView.style.display = "flex";
     }
