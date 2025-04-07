@@ -1,12 +1,10 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
-const cors = require("cors");
-const fs = require("fs");
-require("dotenv").config();
-
 const Document = require("./models/document");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,19 +14,22 @@ app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 mongoose
-  .connect(process.env.MONGODB_URI, {
-    dbName: "publisherDB"
-  })
+  .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
+// Multer config
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads"),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + "-" + file.originalname;
+    cb(null, uniqueName);
+  },
 });
 
 const upload = multer({ storage });
 
+// Upload document
 app.post("/publish", upload.single("file"), async (req, res) => {
   try {
     const { header } = req.body;
@@ -41,37 +42,35 @@ app.post("/publish", upload.single("file"), async (req, res) => {
       fileName: file.originalname,
       fileType: file.mimetype,
       filePath: file.path,
-      fileURL
+      fileURL,
     });
 
     await doc.save();
     res.json({ message: "✅ Document uploaded successfully!" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "❌ Upload failed" });
+    res.status(500).json({ error: "❌ Failed to upload document" });
   }
 });
 
+// View documents
 app.get("/view", async (req, res) => {
   try {
-    const docs = await Document.find().sort({ _id: -1 });
+    const docs = await Document.find();
     res.json(docs);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "❌ Failed to fetch documents" });
   }
 });
 
+// Delete document
 app.delete("/delete/:id", async (req, res) => {
   try {
-    const doc = await Document.findByIdAndDelete(req.params.id);
-    if (doc && fs.existsSync(doc.filePath)) {
-      fs.unlinkSync(doc.filePath);
-    }
-    res.json({ message: "🗑️ Document deleted" });
+    const { id } = req.params;
+    await Document.findByIdAndDelete(id);
+    res.json({ message: "🗑️ Document deleted successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "❌ Delete failed" });
+    res.status(500).json({ error: "❌ Failed to delete document" });
   }
 });
 
