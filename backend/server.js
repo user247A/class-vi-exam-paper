@@ -1,78 +1,108 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const multer = require("multer");
 const cors = require("cors");
-const dotenv = require("dotenv");
-const { v2: cloudinary } = require("cloudinary");
-const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const mongoose = require("mongoose");
+const path = require("path");
+const fs = require("fs");
 
-const Document = require("./models/document");
-
-dotenv.config();
 const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Cloudinary config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-// Storage
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "documents",
-    resource_type: "auto", // handles image/pdf
-    allowed_formats: ["jpg", "jpeg", "png", "pdf"]
-  }
-});
-const upload = multer({ storage });
-
-// MongoDB connect
-mongoose.connect(process.env.MONGODB_URI, {
+// MongoDB connection
+mongoose.connect("mongodb+srv://ssvt:ssvt123@cluster0.hzuqcwl.mongodb.net/", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log("✅ MongoDB connected"))
-.catch(err => console.error("❌ MongoDB error:", err));
+.then(() => console.log("✅ Connected to MongoDB"))
+.catch((err) => console.error("❌ MongoDB connection error:", err));
 
-// Upload route
-app.post("/publish", upload.single("file"), async (req, res) => {
+// Schema
+const fileSchema = new mongoose.Schema({
+  fileName: String,
+  filePath: String,
+  fileType: String,
+  header: String,
+});
+const File = mongoose.model("File", fileSchema);
+
+// Upload configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = "uploads";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + "-" + file.originalname);
+  },
+});
+const upload = multer({ storage });
+
+// Upload endpoint
+app.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const { header } = req.body;
-    const file = req.file;
-
-    const newDoc = new Document({
-      header,
-      fileName: file.originalname,
-      fileType: file.mimetype,
-      filePath: file.path,
-      fileURL: file.path // cloudinary secure_url
+    const file = new File({
+      fileName: req.file.originalname,
+      filePath: req.file.path,
+      fileType: req.file.mimetype,
+      header: header || "Untitled",
     });
 
-    await newDoc.save();
-    res.json({ message: "✅ Document uploaded successfully!" });
-  } catch (err) {
-    console.error("❌ Upload error:", err);
-    res.status(500).json({ error: "Failed to upload document." });
+    await file.save();
+    res.status(200).json({ message: "File uploaded successfully", file });
+  } catch (error) {
+    console.error("Upload Error:", error);
+    res.status(500).json({ error: "File upload failed" });
   }
 });
 
-// View all
+// View endpoint
 app.get("/view", async (req, res) => {
   try {
-    const docs = await Document.find();
-    res.json(docs);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch documents." });
+    const files = await File.find().sort({ _id: -1 });
+    const baseUrl = req.protocol + "://" + req.get("host");
+
+    const response = files.map((file) => ({
+      _id: file._id,
+      fileName: file.fileName,
+      fileURL: baseUrl + "/" + file.filePath.replace(/\\/g, "/"),
+      fileType: file.fileType,
+      header: file.header,
+    }));
+
+    res.status(200).json(response);
+  } catch (error) {
+    console.error("View Error:", error);
+    res.status(500).json({ error: "Failed to retrieve files" });
   }
 });
 
-// Port
-const PORT = process.env.PORT || 5000;
+// Download endpoint
+app.get("/download/:filename", (req, res) => {
+  const filePath = path.join(__dirname, "uploads", req.params.filename);
+
+  if (fs.existsSync(filePath)) {
+    res.download(filePath);
+  } else {
+    res.status(404).json({ error: "File not found" });
+  }
+});
+
+// Static file serving with CORS headers for iframe support
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(path.join(__dirname, "uploads")));
+
+// Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
